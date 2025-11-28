@@ -1,0 +1,32 @@
+# -----------------------
+# Python cache and artifacts
+# -----------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+
+# -----------------------
+# Virtual environment
+# -----------------------
+venv/
+
+# -----------------------
+# Environment variables
+# -----------------------
+.env
+
+# -----------------------
+# OS files
+# -----------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------
+# IDE/editor files
+# -----------------------
+.vscode/
+*.idea/
+*.sublime-project
+*.sublime-workspace
