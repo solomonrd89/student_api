@@ -1,93 +1,73 @@
-from flask import Flask, jsonify
+# app.py
+from flask import Flask, g
 from dotenv import load_dotenv
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session
+from models import Base
+from routes import student_bp
+from routes_course import course_bp
+from utils import success_response, error_response
 
 load_dotenv()
 
 
-# ----------------------------------------------------
-# Factory Function: Creates and configures the Flask app
-# ----------------------------------------------------
+def get_engine():
+    uri = os.getenv("DB_URI")
+    if not uri:
+        raise ValueError("DB_URI is missing in .env")
+    return create_engine(uri, echo=True, future=True)
+
+
 def create_app():
     app = Flask(__name__)
 
-    # ----------------------------------------------------
-    # Register Blueprints
-    # ----------------------------------------------------
-    from routes import student_bp
+    # SQLAlchemy setup
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    SessionFactory = sessionmaker(bind=engine, expire_on_commit=False)
+    app.session_factory = scoped_session(SessionFactory)
 
+    # DB session per request
+    @app.before_request
+    def create_session():
+        g.db = app.session_factory()
+
+    @app.teardown_request
+    def remove_session(exception=None):
+        db = g.get("db")
+        if db:
+            db.close()
+
+    # Register blueprints
     app.register_blueprint(student_bp)
+    app.register_blueprint(course_bp)
 
-    # ----------------------------------------------------
-    # Health & Root Route
-    # ----------------------------------------------------
+    # Root route (use strict success format)
     @app.get("/")
     def home():
-        return (
-            jsonify({"success": True, "data": {"message": "Student API is running"}}),
-            200,
+        return success_response(
+            data={"message": "Student & Course API is running"}, status=200
         )
 
-    # ----------------------------------------------------
-    # Global Error Handlers
-    # ----------------------------------------------------
+    # Error handlers (use strict error format)
     @app.errorhandler(404)
     def not_found(_):
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": {
-                        "message": "Resource not found",
-                        "status": 404,
-                    },
-                }
-            ),
-            404,
-        )
+        return error_response("Resource not found", 404)
 
     @app.errorhandler(405)
     def method_not_allowed(_):
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": {
-                        "message": "Method not allowed",
-                        "status": 405,
-                    },
-                }
-            ),
-            405,
-        )
+        return error_response("Method not allowed", 405)
 
     @app.errorhandler(500)
     def internal_error(_):
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": {
-                        "message": "Internal server error",
-                        "status": 500,
-                    },
-                }
-            ),
-            500,
-        )
+        return error_response("Internal server error", 500)
 
     return app
 
 
-# ----------------------------------------------------
-# Application Entry Point
-# ----------------------------------------------------
 if __name__ == "__main__":
     app = create_app()
     port = int(os.getenv("PORT", 5000))
-
-    # Production-safe: Explicit host, explicit port
-    # Debug only enabled when FLASK_ENV=development
     debug_mode = os.getenv("FLASK_ENV", "production") == "development"
-
     app.run(host="0.0.0.0", port=port, debug=debug_mode)
